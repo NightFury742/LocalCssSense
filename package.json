@@ -1,0 +1,52 @@
+{
+  "name": "local-css-intellisense",
+  "displayName": "Local CSS IntelliSense",
+  "description": "IntelliSense for local CSS classes used in React/Next.js components via styleName prop",
+  "version": "0.1.0",
+  "publisher": "local-css-sense",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:typescriptreact",
+    "onLanguage:javascriptreact",
+    "onLanguage:typescript",
+    "onLanguage:javascript"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [],
+    "commands": [
+      {
+        "command": "localCssSense.triggerCompletion",
+        "title": "Trigger CSS Class Completion"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "localCssSense.triggerCompletion",
+        "key": "ctrl+enter",
+        "when": "editorTextFocus && (editorLangId == 'typescriptreact' || editorLangId == 'javascriptreact' || editorLangId == 'typescript' || editorLangId == 'javascript')"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.74.0",
+    "@vscode/vsce": "^3.7.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  }
+}

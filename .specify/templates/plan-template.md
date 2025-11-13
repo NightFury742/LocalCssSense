@@ -31,7 +31,17 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+**Performance**: Does this feature activate lazily? Estimated activation time < 100ms? Command execution < 500ms? Memory impact < 50MB?
+
+**Dependencies**: Are all dependencies justified? Have alternatives been evaluated? Bundle size impact assessed?
+
+**TypeScript**: Will all code use strict TypeScript? Are type definitions complete?
+
+**Documentation**: Is feature specification complete with user scenarios? Will API documentation be added?
+
+**Testing**: Are unit tests planned for core logic? Integration tests for VS Code API interactions?
+
+**VS Code API**: Will resources be properly disposed? Are activation events optimized?
 
 ## Project Structure
 
