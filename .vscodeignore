@@ -1,0 +1,32 @@
+# Source files (not needed in VSIX)
+src/**
+tests/**
+specs/**
+
+# Development files
+.cursor/**
+.specify/**
+.vscode/**
+.gitignore
+
+# Build artifacts (keep out/ but not source maps in production)
+*.js.map
+
+# Config files (keep package.json, tsconfig.json, but not test configs)
+vitest.config.*
+vitest.config.js.map
+
+# Documentation
+*.md
+!README.md
+
+# Git
+.git/**
+
+# Node modules (shouldn't be included anyway)
+node_modules/**
+
+# Other
+.DS_Store
+*.log
+
