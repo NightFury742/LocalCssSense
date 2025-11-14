@@ -1,9 +1,14 @@
 {
-  "name": "local-css-intellisense",
-  "displayName": "Local CSS IntelliSense",
+  "name": "LocalCssSense",
+  "displayName": "LocalCssSense",
   "description": "IntelliSense for local CSS classes used in React/Next.js components via styleName prop",
   "version": "0.1.0",
-  "publisher": "local-css-sense",
+  "publisher": "NightFury742",
+  "icon": "images/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NightFury742/LocalCssSense.git"
+},
   "engines": {
     "vscode": "^1.74.0"
   },
