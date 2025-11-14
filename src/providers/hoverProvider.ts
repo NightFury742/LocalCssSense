@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import { CSSIndex } from '../services/cssIndex';
 import { ImportParser } from '../services/importParser';
 import { Logger } from '../utils/logger';
@@ -83,16 +84,16 @@ export class HoverProvider implements vscode.HoverProvider {
         return undefined;
       }
 
-      // Get CSS class definition
-      const cssClass = componentIndex.getClass(className);
-      if (!cssClass) {
+      // Get all CSS class occurrences (base + media queries)
+      const allClasses = componentIndex.getAllClasses(className);
+      if (allClasses.length === 0) {
         Logger.debug(`CSS class not found: ${className}`);
         return undefined;
       }
 
-      // Create hover content
-      const hoverContent = this.createHoverContent(cssClass, imports);
-      Logger.debug(`Returning hover for class: ${className}`);
+      // Create hover content showing all definitions grouped by context
+      const hoverContent = this.createHoverContent(allClasses, imports, componentIndex);
+      Logger.debug(`Returning hover for class: ${className} with ${allClasses.length} occurrence(s)`);
 
       return new vscode.Hover(hoverContent, wordRange);
     } catch (error) {
@@ -152,21 +153,185 @@ export class HoverProvider implements vscode.HoverProvider {
   }
 
   /**
-   * Creates hover content showing CSS definition.
+   * Creates hover content showing only CSS properties without file paths, labels, or metadata.
+   * Per FR-001 and FR-002: Shows only CSS properties in code blocks, maintaining property ordering.
    */
-  private createHoverContent(cssClass: any, imports: any[]): vscode.MarkdownString {
-    // Find source file relative path
-    const sourceImport = imports.find(imp => imp.resolvedPath === cssClass.sourceFile);
-    const relativePath = sourceImport 
-      ? sourceImport.importPath 
-      : vscode.workspace.asRelativePath(cssClass.sourceFile);
+  private createHoverContent(allClasses: any[], imports: any[], componentIndex: any): vscode.MarkdownString {
+    if (allClasses.length === 0) {
+      return new vscode.MarkdownString();
+    }
 
-    // Format CSS definition
+    const firstClass = allClasses[0];
+    
+    // Get the CSS file content from the component index to detect media query context
+    const cssFileContent = this.getCSSFileContent(firstClass, componentIndex);
+    
     const markdown = new vscode.MarkdownString();
-    markdown.appendMarkdown(`**${cssClass.name}** (from ${relativePath})\n\n`);
-    markdown.appendCodeblock(cssClass.fullDefinition, 'css');
+    
+    if (allClasses.length === 1) {
+      // Single definition - show with media query context if applicable
+      const mediaQueryContext = cssFileContent ? this.findMediaQueryContext(cssFileContent, firstClass.lineNumber) : null;
+      if (mediaQueryContext) {
+        markdown.appendCodeblock(`${mediaQueryContext} {\n  ${firstClass.fullDefinition}\n}`, 'css');
+      } else {
+        markdown.appendCodeblock(firstClass.fullDefinition, 'css');
+      }
+    } else {
+      // Multiple definitions - show all, base first, without labels
+      // Sort occurrences: base definitions first (no media query), then media query variants
+      const sortedClasses = [...allClasses].sort((a, b) => {
+        const aHasMediaQuery = cssFileContent ? this.findMediaQueryContext(cssFileContent, a.lineNumber) !== null : false;
+        const bHasMediaQuery = cssFileContent ? this.findMediaQueryContext(cssFileContent, b.lineNumber) !== null : false;
+        
+        // Base definitions (no media query) come first
+        if (!aHasMediaQuery && bHasMediaQuery) return -1;
+        if (aHasMediaQuery && !bHasMediaQuery) return 1;
+        return 0; // Keep original order for same type
+      });
+      
+      for (let i = 0; i < sortedClasses.length; i++) {
+        const cssClass = sortedClasses[i];
+        const mediaQueryContext = cssFileContent ? this.findMediaQueryContext(cssFileContent, cssClass.lineNumber) : null;
+        
+        if (i > 0) {
+          markdown.appendMarkdown('\n\n');
+        }
+        
+        if (mediaQueryContext) {
+          markdown.appendCodeblock(`${mediaQueryContext} {\n  ${cssClass.fullDefinition}\n}`, 'css');
+        } else {
+          markdown.appendCodeblock(cssClass.fullDefinition, 'css');
+        }
+      }
+    }
     
     return markdown;
+  }
+
+  /**
+   * Gets the CSS file content for a class to detect media query context.
+   * Uses cached rawContent from CSSFile if available.
+   */
+  private getCSSFileContent(cssClass: any, componentIndex: any): string | null {
+    try {
+      // Try to get rawContent from CSSFile cache
+      for (const cssFile of componentIndex.cssFiles.values()) {
+        if (cssFile.filePath === cssClass.sourceFile && cssFile.rawContent) {
+          return cssFile.rawContent;
+        }
+      }
+      
+      // Fallback: read from file system
+      if (fs.existsSync(cssClass.sourceFile)) {
+        return fs.readFileSync(cssClass.sourceFile, 'utf-8');
+      }
+    } catch (error) {
+      Logger.debug(`Failed to get CSS file content for media query detection: ${error}`);
+    }
+    return null;
+  }
+
+  /**
+   * Enriches class definitions with media query context when applicable.
+   * Returns definitions with @media blocks included when the class is inside a media query.
+   */
+  private enrichDefinitionsWithMediaQueryContext(allClasses: any[], cssFileContent: string | null): string[] {
+    if (!cssFileContent) {
+      // Fallback: return definitions as-is
+      return allClasses.map(cls => cls.fullDefinition);
+    }
+
+    const enriched: string[] = [];
+    
+    for (const cssClass of allClasses) {
+      // Check if this definition is inside a media query by looking backwards from the class
+      const mediaQueryContext = this.findMediaQueryContext(cssFileContent, cssClass.lineNumber);
+      
+      if (mediaQueryContext) {
+        // Include the media query block with the class definition
+        enriched.push(`${mediaQueryContext}\n${cssClass.fullDefinition}`);
+      } else {
+        // Base definition (not in media query)
+        enriched.push(cssClass.fullDefinition);
+      }
+    }
+    
+    return enriched;
+  }
+
+  /**
+   * Finds the @media block that contains a class definition at the given line number.
+   * Returns the complete @media declaration (including multi-line) if found, null otherwise.
+   */
+  private findMediaQueryContext(cssContent: string, lineNumber: number): string | null {
+    const lines = cssContent.split('\n');
+    if (lineNumber < 1 || lineNumber > lines.length) {
+      return null;
+    }
+
+    // Look backwards from the class definition line to find the nearest @media block
+    let mediaQueryStart = -1;
+    let braceCount = 0;
+    let inMediaQuery = false;
+    
+    // Start from the line before the class definition and go backwards
+    for (let i = lineNumber - 2; i >= 0; i--) {
+      const line = lines[i];
+      
+      // Check if this line contains @media
+      if (line.includes('@media')) {
+        mediaQueryStart = i;
+        inMediaQuery = true;
+        // Check if opening brace is on the same line
+        if (line.includes('{')) {
+          braceCount = 1;
+          break;
+        }
+        // Otherwise, we'll collect lines until we find the opening brace
+        break;
+      }
+      
+      // Count braces to see if we're inside a media query
+      for (const char of line) {
+        if (char === '{') braceCount++;
+        if (char === '}') braceCount--;
+      }
+      
+      if (braceCount > 0) {
+        inMediaQuery = true;
+      } else if (inMediaQuery && braceCount === 0) {
+        // We've exited the media query, stop looking
+        break;
+      }
+    }
+    
+    if (mediaQueryStart >= 0) {
+      // Collect all lines from @media until we find the opening brace
+      const mediaQueryLines: string[] = [];
+      let foundOpeningBrace = false;
+      
+      for (let i = mediaQueryStart; i < lines.length && i < lineNumber; i++) {
+        const line = lines[i];
+        mediaQueryLines.push(line);
+        
+        // Check if this line contains the opening brace
+        if (line.includes('{')) {
+          foundOpeningBrace = true;
+          break;
+        }
+      }
+      
+      if (foundOpeningBrace) {
+        // Join all lines and extract the media query part (everything before the opening brace)
+        const fullMediaQuery = mediaQueryLines.join('\n');
+        const braceIndex = fullMediaQuery.indexOf('{');
+        if (braceIndex >= 0) {
+          return fullMediaQuery.substring(0, braceIndex).trim();
+        }
+      }
+    }
+    
+    return null;
   }
 }
 

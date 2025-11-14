@@ -20,13 +20,14 @@ export class CSSParser {
    * Extracts CSS class definitions from CSS content.
    * 
    * @param cssContent - CSS file content
-   * @returns Map of class name → CSSClass
+   * @returns Object with classes map (first occurrence) and allOccurrences map (all occurrences)
    */
-  extractClasses(cssContent: string): Map<string, CSSClass> {
+  extractClasses(cssContent: string): { classes: Map<string, CSSClass>; allOccurrences: Map<string, CSSClass[]> } {
     const classes = new Map<string, CSSClass>();
+    const allOccurrences = new Map<string, CSSClass[]>();
     
     if (!cssContent || cssContent.trim().length === 0) {
-      return classes;
+      return { classes, allOccurrences };
     }
 
     try {
@@ -54,7 +55,16 @@ export class CSSParser {
             classDefinition
           );
           
-          classes.set(className, cssClass);
+          // Store first occurrence in classes map (for backward compatibility and DefinitionProvider)
+          if (!classes.has(className)) {
+            classes.set(className, cssClass);
+          }
+          
+          // Store all occurrences in allOccurrences map (for HoverProvider)
+          if (!allOccurrences.has(className)) {
+            allOccurrences.set(className, []);
+          }
+          allOccurrences.get(className)!.push(cssClass);
         } catch (error) {
           // Graceful degradation: skip invalid class, continue parsing
           Logger.debug(`Skipped invalid CSS class: ${error}`);
@@ -65,7 +75,7 @@ export class CSSParser {
       Logger.warn(`CSS parsing encountered errors, returning partial results: ${error}`);
     }
 
-    return classes;
+    return { classes, allOccurrences };
   }
 
   /**
@@ -76,9 +86,9 @@ export class CSSParser {
    * @returns CSSFile instance
    */
   parseCSSContent(content: string, filePath: string): CSSFile {
-    const classes = this.extractClasses(content);
+    const { classes, allOccurrences } = this.extractClasses(content);
     
-    // Update sourceFile for all classes
+    // Update sourceFile for all classes (first occurrence)
     for (const cssClass of classes.values()) {
       // Create new CSSClass with updated sourceFile
       const updatedClass = new CSSClass(
@@ -89,6 +99,20 @@ export class CSSParser {
         cssClass.fullDefinition
       );
       classes.set(cssClass.name, updatedClass);
+    }
+    
+    // Update sourceFile for all occurrences
+    const updatedAllOccurrences = new Map<string, CSSClass[]>();
+    for (const [className, occurrences] of allOccurrences.entries()) {
+      updatedAllOccurrences.set(className, occurrences.map(cssClass => 
+        new CSSClass(
+          cssClass.name,
+          filePath,
+          cssClass.lineNumber,
+          cssClass.properties,
+          cssClass.fullDefinition
+        )
+      ));
     }
 
     // Get file modification time (use current time if file doesn't exist)
@@ -102,7 +126,7 @@ export class CSSParser {
       Logger.debug(`Could not get file stats for ${filePath}: ${error}`);
     }
 
-    return new CSSFile(filePath, lastModified, classes, content);
+    return new CSSFile(filePath, lastModified, classes, content, updatedAllOccurrences);
   }
 
   /**
@@ -141,10 +165,10 @@ export class CSSParser {
 
   /**
    * Finds all CSS class matches in content.
-   * Returns matches with class name, definition, and line number.
+   * Returns matches with class name, definition, line number, and match index.
    */
-  private findClassMatches(content: string): Array<{ className: string; definition: string; lineNumber: number }> {
-    const matches: Array<{ className: string; definition: string; lineNumber: number }> = [];
+  private findClassMatches(content: string): Array<{ className: string; definition: string; lineNumber: number; matchIndex: number }> {
+    const matches: Array<{ className: string; definition: string; lineNumber: number; matchIndex: number }> = [];
     const lines = content.split('\n');
     
     // Reset regex lastIndex
@@ -171,7 +195,7 @@ export class CSSParser {
       const definition = this.extractClassDefinition(content, matchStart, matchEnd - 1);
       
       if (definition) {
-        matches.push({ className, definition, lineNumber });
+        matches.push({ className, definition, lineNumber, matchIndex: matchStart });
       }
     }
     

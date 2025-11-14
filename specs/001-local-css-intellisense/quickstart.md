@@ -61,6 +61,10 @@ This VS Code extension provides IntelliSense (autocomplete and hover tooltips) f
    }
    ```
 
+5. Ctrl+click (Cmd+click on macOS) on a class name to navigate to its definition:
+   - Opens the CSS file
+   - Positions cursor at the line where the class is defined
+
 ### Multiple CSS Files
 
 Import multiple CSS files in the same component:
@@ -93,6 +97,12 @@ The extension validates CSS class names:
 
 - **Trigger**: Hover over CSS class name in `styleName` prop
 - **Shows**: Full CSS definition (properties and values)
+- **Performance**: < 300ms response time
+
+### Go to Definition (P1)
+
+- **Trigger**: Ctrl+click (Cmd+click on macOS) on CSS class name in `styleName` prop
+- **Action**: Navigates to CSS file and positions cursor at class definition
 - **Performance**: < 300ms response time
 
 ### Real-time Updates (P2)

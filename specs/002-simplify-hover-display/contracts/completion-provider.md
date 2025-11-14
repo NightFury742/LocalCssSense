@@ -46,7 +46,7 @@ Each completion item represents a CSS class name from imported CSS files. When a
 - `label: string` - Plain CSS class name only (e.g., `"container"`). No indication of multiple definitions in the label, even when the class has base + media query variants
 - `kind: vscode.CompletionItemKind.Class` - Item kind
 - `detail: string` - Source CSS file path (relative)
-- `documentation: vscode.MarkdownString` - Full CSS class declaration(s) with all properties, source file, and line number (shown when scrolling through dropdown). When a class has multiple definitions (base + media queries), all definitions are shown with proper labeling matching the hover format (base definition first with "Base Definition" label, followed by each media query variant with "Breakpoint: @media (...)" label)
+- `documentation: vscode.MarkdownString` - CSS class declaration(s) with all properties (shown when scrolling through dropdown). When a class has multiple definitions (base + media queries), all definitions are shown without file paths or labels, matching the hover format
 - `insertText: string` - Class name to insert
 - `range: vscode.Range` - Text range to replace (only replaces current word being typed, supports multiple classes)
 
@@ -60,18 +60,17 @@ The provider supports multiple space-separated classes in the `styleName` attrib
 ### Documentation Display
 
 When scrolling through completion items using up/down arrows:
-- Full CSS class declaration(s) is shown in the details panel
+- CSS class declaration(s) is shown in the details panel
 - Includes all CSS properties (not just preview)
-- Shows source file path and line number
 - Formatted as markdown code block for readability
-- When a class has multiple definitions (base + media queries), all definitions are displayed with proper labeling:
-  - Base definition first with "Base Definition" label
-  - Each media query variant follows with "Breakpoint: @media (...)" label
+- When a class has multiple definitions (base + media queries), all definitions are displayed without file paths or labels:
+  - Base definition first (no label)
+  - Each media query variant follows (no label)
   - Format matches the hover tooltip for consistency
 
 ### Performance Requirements
 
-- **Response Time**: < 500ms (FR-007)
+- **Response Time**: < 500ms (per plan.md performance goals)
 - **Caching**: Results cached per document
 - **Async**: Non-blocking, uses async operations
 
@@ -88,9 +87,9 @@ function Component() {
 ```
 
 **Output**: Completion items for all classes in `./styles.css`:
-- `container` (from styles.css) - Shows full CSS declaration when scrolling
-- `header` (from styles.css) - Shows full CSS declaration when scrolling
-- `content` (from styles.css) - Shows full CSS declaration when scrolling
+- `container` (from styles.css) - Shows CSS declaration when scrolling
+- `header` (from styles.css) - Shows CSS declaration when scrolling
+- `content` (from styles.css) - Shows CSS declaration when scrolling
 
 ### Multiple Classes
 
@@ -142,19 +141,11 @@ function Component() {
 - `container` (from styles.css) - Label shows plain class name only
 
 **When scrolling through completion** (details panel shows):
-```
-container (from styles.css)
-
-Base Definition
-
+```css
 .container {
   display: flex;
   padding: 1rem;
 }
-
----
-
-Breakpoint: @media (max-width: 768px)
 
 @media (max-width: 768px) {
   .container {
@@ -162,10 +153,6 @@ Breakpoint: @media (max-width: 768px)
     padding: 0.5rem;
   }
 }
-
----
-
-Breakpoint: @media (min-width: 1200px)
 
 @media (min-width: 1200px) {
   .container {

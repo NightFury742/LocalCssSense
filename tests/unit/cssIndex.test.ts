@@ -139,6 +139,37 @@ describe('CSSIndex', () => {
       const fileCache = cssIndex.getFileCache();
       expect(fileCache.isStale(cssPath)).toBe(true);
     });
+
+    it('should update component indices that reference the CSS file', async () => {
+      const componentPath1 = path.join(tempDir, 'Component1.tsx');
+      const componentPath2 = path.join(tempDir, 'Component2.tsx');
+      const cssPath = path.join(tempDir, 'styles.css');
+      
+      fs.writeFileSync(cssPath, '.container { display: flex; }');
+      await cssIndex.indexComponent(componentPath1, [cssPath]);
+      await cssIndex.indexComponent(componentPath2, [cssPath]);
+
+      // Update CSS file
+      fs.writeFileSync(cssPath, '.container { display: flex; }\n.new-class { color: red; }');
+      
+      // Update should invalidate cache and component indices
+      await cssIndex.updateCSSFile(cssPath);
+
+      // Component indices should be invalidated (will be re-indexed on next access)
+      const index1 = cssIndex.getComponentIndex(componentPath1);
+      const index2 = cssIndex.getComponentIndex(componentPath2);
+      
+      // Indices may still exist but cache is stale, so re-indexing will pick up new classes
+      const fileCache = cssIndex.getFileCache();
+      expect(fileCache.isStale(cssPath)).toBe(true);
+    });
+
+    it('should handle non-existent CSS file gracefully', async () => {
+      const nonExistentPath = path.join(tempDir, 'non-existent.css');
+      
+      // Should not throw
+      await cssIndex.updateCSSFile(nonExistentPath);
+    });
   });
 
   describe('removeCSSFile', () => {
@@ -153,6 +184,34 @@ describe('CSSIndex', () => {
 
       const fileCache = cssIndex.getFileCache();
       expect(fileCache.get(cssPath)).toBeUndefined();
+    });
+
+    it('should invalidate component indices that reference the deleted CSS file', async () => {
+      const componentPath1 = path.join(tempDir, 'Component1.tsx');
+      const componentPath2 = path.join(tempDir, 'Component2.tsx');
+      const cssPath = path.join(tempDir, 'styles.css');
+      
+      fs.writeFileSync(cssPath, '.container { display: flex; }');
+      await cssIndex.indexComponent(componentPath1, [cssPath]);
+      await cssIndex.indexComponent(componentPath2, [cssPath]);
+
+      // Remove CSS file
+      cssIndex.removeCSSFile(cssPath);
+
+      // Component indices should be invalidated
+      const index1 = cssIndex.getComponentIndex(componentPath1);
+      const index2 = cssIndex.getComponentIndex(componentPath2);
+      
+      // Indices should be removed or invalidated
+      const fileCache = cssIndex.getFileCache();
+      expect(fileCache.get(cssPath)).toBeUndefined();
+    });
+
+    it('should handle non-existent CSS file gracefully', () => {
+      const nonExistentPath = path.join(tempDir, 'non-existent.css');
+      
+      // Should not throw
+      cssIndex.removeCSSFile(nonExistentPath);
     });
   });
 

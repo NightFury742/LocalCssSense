@@ -266,7 +266,7 @@ function Component() {
       const markdownDoc = resolvedItem.documentation as vscode.MarkdownString;
       expect(markdownDoc.isTrusted).toBe(true);
       
-      // Verify documentation contains CSS class definition
+      // Verify documentation contains only CSS properties (no file paths or labels)
       const docValue = markdownDoc.value;
       expect(docValue).toContain('container');
       expect(docValue).toContain('display: flex');
@@ -274,11 +274,11 @@ function Component() {
       expect(docValue).toContain('margin: 0 auto');
       expect(docValue).toContain('max-width: 1200px');
       
-      // Verify it includes source file information
-      expect(docValue).toContain('Source:');
-      expect(docValue).toContain('styles.css');
+      // Verify it does NOT include file paths or labels in documentation
+      expect(docValue).not.toContain('from');
+      expect(docValue).not.toContain('styles.css');
       
-      // Verify detail is set
+      // Verify detail is still set (shows file path in detail, not documentation)
       expect(resolvedItem.detail).toBeDefined();
       expect(resolvedItem.detail).toContain('styles.css');
     });
@@ -419,6 +419,151 @@ function Component() {
       // Should return item as-is without throwing
       expect(resolvedItem).toBeDefined();
       expect(resolvedItem).toBe(item);
+    });
+
+    it('should show only one completion item per class name even with multiple definitions (base + media queries)', async () => {
+      const componentPath = path.join(tempDir, 'Component.tsx');
+      const cssPath = path.join(tempDir, 'styles.css');
+      
+      const cssContent = `
+        .container {
+          display: flex;
+          padding: 1rem;
+        }
+        
+        @media (max-width: 768px) {
+          .container {
+            display: block;
+            padding: 0.5rem;
+          }
+        }
+        
+        @media (min-width: 1200px) {
+          .container {
+            padding: 2rem;
+          }
+        }
+      `;
+      fs.writeFileSync(cssPath, cssContent);
+
+      const componentContent = `import './styles.css';
+
+function Component() {
+  return <div styleName="`;
+      fs.writeFileSync(componentPath, componentContent);
+
+      await cssIndex.indexComponent(componentPath, [cssPath]);
+
+      const document = await vscode.workspace.openTextDocument(componentPath);
+      const lineText = document.lineAt(3).text;
+      const quoteIndex = lineText.indexOf('styleName="') + 'styleName="'.length;
+      const position = new vscode.Position(3, quoteIndex);
+
+      const completionItems = await provider.provideCompletionItems(
+        document,
+        position,
+        {} as vscode.CancellationToken,
+        {} as vscode.CompletionContext
+      );
+
+      const items = Array.isArray(completionItems) 
+        ? completionItems 
+        : (completionItems as vscode.CompletionList).items;
+
+      // Should have only ONE completion item for "container" (not separate items for base and media queries)
+      const containerItems = items.filter(item => item.label === 'container');
+      expect(containerItems.length).toBe(1);
+      
+      // Label should be plain class name only (no "(base)" or "(min-width: 768px)" suffixes)
+      expect(containerItems[0].label).toBe('container');
+      expect(containerItems[0].label).not.toContain('(');
+      expect(containerItems[0].label).not.toContain('base');
+      expect(containerItems[0].label).not.toContain('min-width');
+      
+      // Verify item has all occurrences stored in data
+      expect((containerItems[0] as any).data).toBeDefined();
+      expect((containerItems[0] as any).data.allOccurrences).toBeDefined();
+      expect((containerItems[0] as any).data.allOccurrences.length).toBeGreaterThan(1);
+    });
+
+    it('should show all definitions (base + media queries) in details panel when resolving completion item', async () => {
+      const componentPath = path.join(tempDir, 'Component.tsx');
+      const cssPath = path.join(tempDir, 'styles.css');
+      
+      const cssContent = `
+        .container {
+          display: flex;
+          padding: 1rem;
+        }
+        
+        @media (max-width: 768px) {
+          .container {
+            display: block;
+            padding: 0.5rem;
+          }
+        }
+        
+        @media (min-width: 1200px) {
+          .container {
+            padding: 2rem;
+          }
+        }
+      `;
+      fs.writeFileSync(cssPath, cssContent);
+
+      const componentContent = `import './styles.css';
+
+function Component() {
+  return <div styleName="`;
+      fs.writeFileSync(componentPath, componentContent);
+
+      await cssIndex.indexComponent(componentPath, [cssPath]);
+
+      const document = await vscode.workspace.openTextDocument(componentPath);
+      const lineText = document.lineAt(3).text;
+      const quoteIndex = lineText.indexOf('styleName="') + 'styleName="'.length;
+      const position = new vscode.Position(3, quoteIndex);
+
+      const completionItems = await provider.provideCompletionItems(
+        document,
+        position,
+        {} as vscode.CancellationToken,
+        {} as vscode.CompletionContext
+      );
+
+      const items = Array.isArray(completionItems) 
+        ? completionItems 
+        : (completionItems as vscode.CompletionList).items;
+
+      const containerItem = items.find(item => item.label === 'container');
+      expect(containerItem).toBeDefined();
+
+      // Resolve the item (simulating user scrolling through items)
+      const resolvedItem = await provider.resolveCompletionItem(
+        containerItem!,
+        {} as vscode.CancellationToken
+      );
+
+      // Verify documentation shows only CSS properties without labels or file paths
+      expect(resolvedItem.documentation).toBeDefined();
+      const docValue = (resolvedItem.documentation as vscode.MarkdownString).value;
+      
+      // Should show base definition first (without labels)
+      expect(docValue).toContain('display: flex');
+      expect(docValue).toContain('padding: 1rem');
+      
+      // Should show media query variants (without breakpoint labels)
+      expect(docValue).toContain('@media (max-width: 768px)');
+      expect(docValue).toContain('display: block');
+      expect(docValue).toContain('padding: 0.5rem');
+      expect(docValue).toContain('@media (min-width: 1200px)');
+      expect(docValue).toContain('padding: 2rem');
+      
+      // Should NOT contain labels or file paths
+      expect(docValue).not.toContain('Base Definition');
+      expect(docValue).not.toContain('Breakpoint:');
+      expect(docValue).not.toContain('from');
+      expect(docValue).not.toContain('styles.css');
     });
   });
 });

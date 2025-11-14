@@ -1,91 +1,92 @@
 # Implementation Plan: Local CSS IntelliSense Extension
 
-**Branch**: `001-local-css-intellisense` | **Date**: 2025-01-27 | **Spec**: [spec.md](./spec.md)
+**Branch**: `001-local-css-intellisense` | **Date**: 2025-01-27 | **Spec**: `/specs/001-local-css-intellisense/spec.md`
 **Input**: Feature specification from `/specs/001-local-css-intellisense/spec.md`
 
 **Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/commands/plan.md` for the execution workflow.
 
 ## Summary
 
-Create a VS Code extension that provides IntelliSense (autocomplete and hover tooltips) for local CSS classes used in React/Next.js components via the `styleName` prop. The extension will parse CSS files imported in component files (same-directory imports only for P1), extract CSS class definitions, and provide real-time autocomplete suggestions and hover tooltips showing CSS definitions. The extension uses VS Code's Language Server Protocol (LSP) features via completion providers and hover providers, with lazy activation and efficient file watching to meet performance requirements.
+Provide IntelliSense (autocomplete, hover tooltips, and go to definition) for local CSS classes used in React/Next.js components via the `styleName` prop. The extension parses CSS import statements from component files, indexes CSS classes from imported CSS files, and provides real-time autocomplete suggestions, hover information, and navigation to CSS class definitions. Uses VS Code's built-in Language Server Protocol features (`CompletionItemProvider`, `HoverProvider`, and `DefinitionProvider`) with custom lightweight CSS and import parsing (no external dependencies). Designed for minimal performance impact with lazy activation, caching, and debouncing.
 
 ## Technical Context
 
-**Language/Version**: TypeScript 5.x (strict mode enabled)  
-**Primary Dependencies**: 
-- `@types/vscode`: VS Code API type definitions (dev dependency)
-- Built-in Node.js APIs: `fs`, `path`, `util` for file operations
-- VS Code APIs: `vscode.languages.registerCompletionItemProvider`, `vscode.languages.registerHoverProvider`, `vscode.workspace.createFileSystemWatcher`
-- CSS parsing: Custom lightweight parser (no external CSS parser dependency - use regex/string parsing for class extraction)
+<!--
+  ACTION REQUIRED: Replace the content in this section with the technical details
+  for the project. The structure here is presented in advisory capacity to guide
+  the iteration process.
+-->
 
-**Storage**: In-memory index of CSS classes per workspace (Map-based data structures). No persistent storage required.  
-**Testing**: Vitest (lightweight, fast) for unit tests; VS Code extension test framework for integration tests  
-**Target Platform**: VS Code extension (runs on Node.js runtime within VS Code)  
+**Language/Version**: TypeScript 5.0+ (strict mode enabled)  
+**Primary Dependencies**: VS Code API (`@types/vscode`), Node.js built-in APIs (`fs`, `path`), no runtime dependencies  
+**Storage**: In-memory Maps (`Map<string, ComponentIndex>`, `Map<string, CSSFile>`) - no persistent storage  
+**Testing**: Vitest 1.0+ (unit tests for core logic, integration tests for VS Code API interactions)  
+**Target Platform**: VS Code extension (cross-platform: Windows, macOS, Linux)  
 **Project Type**: Single project (VS Code extension)  
 **Performance Goals**: 
-- Activation time < 100ms (lazy activation)
-- Autocomplete suggestions < 500ms (FR-007)
+- Activation time < 100ms (lazy activation via `onLanguage` events)
+- Autocomplete suggestions < 500ms (SC-002)
 - Hover tooltips < 300ms (SC-008)
-- File change detection < 2 seconds (SC-005)
+- Go to Definition < 300ms (SC-011)
+- File change detection updates < 2 seconds (SC-005)
 - Memory footprint < 50MB idle (constitution requirement)
 
 **Constraints**: 
-- Minimal dependencies (prefer built-in APIs)
-- Lazy activation required (onLanguage: typescriptreact, javascriptreact)
-- Asynchronous file operations
-- Proper resource disposal (Disposable pattern)
-- TypeScript strict mode
+- Performance budgets from constitution (activation < 100ms, commands < 500ms, memory < 50MB)
+- Must work with React/Next.js projects using relative CSS imports
+- P1 scope: Only same-directory imports (`./styles.css`), string literals only, compiled `.css` files only
+- Graceful degradation for malformed CSS (parse valid parts, skip invalid sections)
 
 **Scale/Scope**: 
-- Single workspace support (P1)
-- Handles typical React/Next.js project sizes (100-1000 CSS files)
-- Supports multiple CSS files per component (FR-003)
-- Real-time updates for file changes (FR-006)
+- VS Code extension for React/Next.js projects
+- Typical project: 100-1000 CSS files, 10-50 classes per file
+- Estimated index size: < 10MB for typical project (1000 CSS files, 10 classes each)
+- Supports multiple CSS files per component, multiple classes per `styleName` attribute
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-**Performance**: 
-- ✅ Lazy activation: Extension activates on `onLanguage:typescriptreact` and `onLanguage:javascriptreact` events
-- ✅ Activation time: < 100ms (minimal initialization, defer heavy work)
-- ✅ Command execution: Autocomplete < 500ms (cached index, async operations)
-- ✅ Memory impact: < 50MB (in-memory index, efficient data structures)
+**Performance**: ✅ PASS
+- Lazy activation: Uses `onLanguage:typescriptreact` and `onLanguage:javascriptreact` activation events (only activates when React/Next.js files are opened)
+- Estimated activation time: < 100ms (lightweight initialization, deferred file indexing)
+- Command execution: < 500ms (autocomplete < 500ms per SC-002, hover < 300ms per SC-008, go to definition < 300ms per SC-011)
+- Memory impact: < 50MB idle (in-memory Maps, estimated < 10MB for typical project per data-model.md)
 
-**Dependencies**: 
-- ✅ Minimal dependencies: Only `@types/vscode` (dev), TypeScript compiler, Vitest (dev)
-- ✅ No external CSS parser: Custom lightweight parser using built-in Node.js APIs
-- ✅ VS Code APIs: Use built-in extension APIs for completion and hover
-- ✅ Bundle size: Minimal (no large dependencies)
+**Dependencies**: ✅ PASS
+- Only dev dependencies: `@types/vscode`, `typescript`, `vitest` (all justified)
+- No runtime dependencies: Uses built-in Node.js APIs (`fs`, `path`) and VS Code APIs
+- Alternatives evaluated: Custom CSS parser (no `css`/`postcss` dependency), regex-based import parsing (no AST parser dependency)
+- Bundle size impact: Minimal (only TypeScript compilation output, no external runtime packages)
 
-**TypeScript**: 
-- ✅ Strict mode: `strict: true` in tsconfig.json
-- ✅ Type definitions: Complete types for all interfaces and classes
-- ✅ No `any` types: All types explicitly defined
+**TypeScript**: ✅ PASS
+- Strict mode enabled: `tsconfig.json` has `"strict": true`
+- Type definitions: Complete type definitions for all models (CSSFile, CSSClass, ImportStatement, ComponentIndex)
+- No `any` types: All types explicitly defined in data-model.md
 
-**Documentation**: 
-- ✅ Feature specification: Complete with user scenarios and acceptance criteria
-- ✅ API documentation: JSDoc comments for all public interfaces
-- ✅ Inline comments: Complex parsing logic documented
-- ✅ README: Will be updated with usage instructions
+**Documentation**: ✅ PASS
+- Feature specification: Complete with user scenarios, requirements, acceptance criteria (spec.md)
+- API documentation: Will be added via JSDoc comments for all public functions, classes, and interfaces
+- User documentation: README updates planned for user-facing features (including go to definition)
+- Code comments: Inline comments for complex logic (CSS parsing, import parsing, definition provider)
 
-**Testing**: 
-- ✅ Unit tests: Core parsing and indexing logic (>80% coverage target)
-- ✅ Integration tests: VS Code API interactions (completion, hover, file watching)
-- ✅ Test framework: Vitest for fast execution
+**Testing**: ✅ PASS
+- Unit tests: Planned for core logic (CSS parsing, import parsing, CSS indexing) - see `tests/unit/`
+- Integration tests: Planned for VS Code API interactions (completion provider, hover provider, definition provider, file watchers) - see `tests/integration/`
+- Test coverage target: >80% for core modules (per constitution)
 
-**VS Code API**: 
-- ✅ Resource disposal: All watchers and providers properly disposed
-- ✅ Disposable pattern: Extension implements `Disposable` interface
-- ✅ Activation events: Optimized lazy activation (`onLanguage` events)
-- ✅ Event handling: Proper cleanup in `deactivate()` function
+**VS Code API**: ✅ PASS
+- Resource disposal: All resources (file watchers, event listeners) will be properly disposed using VS Code's `Disposable` pattern
+- Activation events: Optimized using `onLanguage` events (lazy activation, not `onStartupFinished`)
+- Proper cleanup: `deactivate()` function will dispose all resources
+- DefinitionProvider: Uses built-in VS Code API, no additional dependencies
 
 ## Project Structure
 
 ### Documentation (this feature)
 
 ```text
-specs/001-local-css-intellisense/
+specs/[###-feature]/
 ├── plan.md              # This file (/speckit.plan command output)
 ├── research.md          # Phase 0 output (/speckit.plan command)
 ├── data-model.md        # Phase 1 output (/speckit.plan command)
@@ -95,76 +96,65 @@ specs/001-local-css-intellisense/
 ```
 
 ### Source Code (repository root)
+<!--
+  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
+  for this feature. Delete unused options and expand the chosen structure with
+  real paths (e.g., apps/admin, packages/something). The delivered plan must
+  not include Option labels.
+-->
 
 ```text
 src/
-├── extension.ts         # Extension entry point, activation/deactivation
-├── providers/
-│   ├── completionProvider.ts    # Autocomplete provider for styleName prop
-│   └── hoverProvider.ts         # Hover tooltip provider for CSS classes
-├── services/
-│   ├── cssParser.ts            # CSS class extraction parser
-│   ├── importParser.ts          # Import statement parser for JSX/TSX files
-│   └── cssIndex.ts              # In-memory CSS class index manager
+├── extension.ts              # Main extension entry point, activation/deactivation
 ├── models/
-│   ├── cssFile.ts               # CSS file entity model
-│   ├── cssClass.ts              # CSS class entity model
-│   └── importStatement.ts       # Import statement model
+│   ├── componentIndex.ts     # ComponentIndex entity
+│   ├── cssClass.ts           # CSSClass entity
+│   ├── cssFile.ts            # CSSFile entity
+│   └── importStatement.ts    # ImportStatement entity
+├── providers/
+│   ├── completionProvider.ts # CompletionItemProvider for autocomplete
+│   ├── hoverProvider.ts      # HoverProvider for hover tooltips
+│   └── definitionProvider.ts # DefinitionProvider for go to definition
+├── services/
+│   ├── cssIndex.ts           # Main CSS index service (Map-based storage)
+│   ├── cssParser.ts          # CSS file parsing (regex-based)
+│   └── importParser.ts       # Import statement parsing (regex-based)
 └── utils/
-    ├── pathResolver.ts           # Path resolution utilities
-    └── logger.ts                 # Logging utilities
+    ├── logger.ts             # Logging utility
+    └── pathResolver.ts       # Path resolution utilities
 
 tests/
+├── setup.ts                  # Test setup/configuration
 ├── unit/
-│   ├── cssParser.test.ts
-│   ├── importParser.test.ts
-│   └── cssIndex.test.ts
+│   ├── cssIndex.test.ts      # Unit tests for CSS index service
+│   ├── cssParser.test.ts     # Unit tests for CSS parser
+│   └── importParser.test.ts  # Unit tests for import parser
 └── integration/
-    ├── completionProvider.test.ts
-    └── hoverProvider.test.ts
+    ├── completionProvider.test.ts  # Integration tests for completion provider
+    ├── hoverProvider.test.ts       # Integration tests for hover provider
+    ├── definitionProvider.test.ts  # Integration tests for definition provider
+    └── fileWatcher.test.ts         # Integration tests for file watching
+
+out/                          # Compiled JavaScript output (TypeScript compilation)
 ```
 
-**Structure Decision**: Single project structure (VS Code extension). Code organized by responsibility: providers (VS Code API integration), services (core logic), models (data structures), and utils (shared utilities). Tests mirror source structure.
+**Structure Decision**: Single project structure (VS Code extension). The structure follows VS Code extension best practices:
+- `src/extension.ts`: Main entry point with activation/deactivation logic
+- `src/models/`: Domain entities (CSSFile, CSSClass, ImportStatement, ComponentIndex)
+- `src/providers/`: VS Code Language Server Protocol providers (CompletionItemProvider, HoverProvider, DefinitionProvider)
+- `src/services/`: Core business logic (CSS parsing, import parsing, indexing)
+- `src/utils/`: Utility functions (logging, path resolution)
+- `tests/`: Separated into unit tests (core logic) and integration tests (VS Code API interactions)
+- `out/`: Compiled output directory (excluded from source control)
 
 ## Complexity Tracking
 
 > **Fill ONLY if Constitution Check has violations that must be justified**
 
-No violations - all constitution requirements met.
-
-## Phase 0: Research (Complete)
-
-**Status**: ✅ Complete
-
-**Artifacts Generated**:
-- `research.md` - Technical research and decision rationale
-
-**Key Decisions**:
-1. VS Code CompletionItemProvider and HoverProvider APIs
-2. Custom lightweight CSS parser (no external dependencies)
-3. Regex-based import statement parsing
-4. VS Code FileSystemWatcher for change detection
-5. Map-based in-memory index structure
-6. Lazy activation via `onLanguage` events
-
-**All NEEDS CLARIFICATION items resolved**: ✅
-
-## Phase 1: Design & Contracts (Complete)
-
-**Status**: ✅ Complete
-
-**Artifacts Generated**:
-- `data-model.md` - Entity models and data structures
-- `contracts/completion-provider.md` - Completion provider interface
-- `contracts/hover-provider.md` - Hover provider interface
-- `contracts/css-parser.md` - CSS parser service contract
-- `contracts/import-parser.md` - Import parser service contract
-- `quickstart.md` - User quick start guide
-
-**Agent Context Updated**: ✅ Cursor IDE context file updated with TypeScript and project details
-
-**Constitution Check Post-Design**: ✅ All requirements still met
-
-## Next Steps
-
-Ready for `/speckit.tasks` command to generate implementation tasks.
+No violations detected. All constitution checks passed. The implementation uses:
+- Built-in VS Code APIs (no external runtime dependencies)
+- Custom lightweight parsers (no heavy parsing libraries)
+- In-memory Maps (no persistent storage complexity)
+- Lazy activation (minimal startup overhead)
+- Standard VS Code extension patterns (proven architecture)
+- DefinitionProvider reuses existing index and logic (no additional complexity)

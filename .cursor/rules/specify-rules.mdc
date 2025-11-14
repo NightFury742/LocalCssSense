@@ -1,0 +1,33 @@
+# localCssSense Development Guidelines
+
+Auto-generated from all feature plans. Last updated: 2025-11-13
+
+## Active Technologies
+- TypeScript 5.0+ (strict mode enabled) + VS Code API (`@types/vscode`), Node.js built-in APIs (`fs`, `path`), no runtime dependencies (001-local-css-intellisense)
+- In-memory Maps (`Map<string, ComponentIndex>`, `Map<string, CSSFile>`) - no persistent storage (001-local-css-intellisense)
+
+- TypeScript 5.x (strict mode enabled) (001-local-css-intellisense)
+
+## Project Structure
+
+```text
+src/
+tests/
+```
+
+## Commands
+
+npm test && npm run lint
+
+## Code Style
+
+TypeScript 5.x (strict mode enabled): Follow standard conventions
+
+## Recent Changes
+- 001-local-css-intellisense: Added TypeScript 5.0+ (strict mode enabled) + VS Code API (`@types/vscode`), Node.js built-in APIs (`fs`, `path`), no runtime dependencies
+- 001-local-css-intellisense: Added TypeScript 5.0+ (strict mode enabled) + VS Code API (`@types/vscode`), Node.js built-in APIs (`fs`, `path`), no runtime dependencies
+
+- 001-local-css-intellisense: Added TypeScript 5.x (strict mode enabled)
+
+<!-- MANUAL ADDITIONS START -->
+<!-- MANUAL ADDITIONS END -->

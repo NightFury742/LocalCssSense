@@ -32,24 +32,17 @@ Provider activates when:
 
 ### Hover Content
 
-Hover displays CSS definition(s) for the class. When a class appears multiple times (e.g., base definition + media query variants), all definitions are shown grouped by context.
+Hover displays only CSS properties without file paths, class name headers, or metadata labels. When a class appears multiple times (e.g., base definition + media query variants), all definitions are shown without labels.
 
 **Format (single definition)**:
-```markdown
-**className** (from styles.css)
-
 ```css
 .className {
   property: value;
   property: value;
 }
 ```
-```
 
 **Format (multiple definitions with media queries)**:
-```markdown
-**className** (from styles.css)
-
 ```css
 .className {
   property: value;
@@ -62,15 +55,14 @@ Hover displays CSS definition(s) for the class. When a class appears multiple ti
   }
 }
 ```
-```
 
 **Properties**:
-- `contents: vscode.MarkdownString` - Formatted CSS definition
+- `contents: vscode.MarkdownString` - Formatted CSS definition (CSS code block only, no metadata)
 - `range: vscode.Range` - Text range that triggered hover
 
 ### Performance Requirements
 
-- **Response Time**: < 300ms (SC-008)
+- **Response Time**: < 300ms (per plan.md performance goals)
 - **Caching**: CSS definitions cached per file
 - **Async**: Non-blocking, uses async operations
 
@@ -85,9 +77,7 @@ function Component() {
 ```
 
 **Hover over `container` (single definition)**:
-```
-container (from styles.css)
-
+```css
 .container {
   display: flex;
   padding: 1rem;
@@ -96,9 +86,7 @@ container (from styles.css)
 ```
 
 **Hover over `container` (with media query)**:
-```
-container (from styles.css)
-
+```css
 .container {
   display: flex;
   padding: 1rem;

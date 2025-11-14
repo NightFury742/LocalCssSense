@@ -34,7 +34,7 @@ describe('CSSParser', () => {
         }
       `;
 
-      const classes = parser.extractClasses(cssContent);
+      const { classes } = parser.extractClasses(cssContent);
 
       expect(classes.size).toBe(2);
       expect(classes.has('container')).toBe(true);
@@ -60,7 +60,7 @@ describe('CSSParser', () => {
         }
       `;
 
-      const classes = parser.extractClasses(cssContent);
+      const { classes } = parser.extractClasses(cssContent);
 
       expect(classes.size).toBe(3);
       expect(classes.has('my-class')).toBe(true);
@@ -80,7 +80,7 @@ describe('CSSParser', () => {
         }
       `;
 
-      const classes = parser.extractClasses(cssContent);
+      const { classes } = parser.extractClasses(cssContent);
 
       expect(classes.size).toBe(2);
       expect(classes.has('container')).toBe(true);
@@ -97,7 +97,7 @@ describe('CSSParser', () => {
         }
       `;
 
-      const classes = parser.extractClasses(cssContent);
+      const { classes } = parser.extractClasses(cssContent);
 
       expect(classes.size).toBe(2);
       expect(classes.has('container')).toBe(true);
@@ -116,7 +116,7 @@ describe('CSSParser', () => {
         }
       `;
 
-      const classes = parser.extractClasses(cssContent);
+      const { classes } = parser.extractClasses(cssContent);
 
       expect(classes.size).toBe(2);
       expect(classes.has('container')).toBe(true);
@@ -136,7 +136,7 @@ describe('CSSParser', () => {
         }
       `;
 
-      const classes = parser.extractClasses(cssContent);
+      const { classes } = parser.extractClasses(cssContent);
 
       // Should extract valid classes
       expect(classes.has('valid')).toBe(true);
@@ -151,7 +151,7 @@ describe('CSSParser', () => {
         }
       `;
 
-      const classes = parser.extractClasses(cssContent);
+      const { classes } = parser.extractClasses(cssContent);
       const containerClass = classes.get('container');
 
       expect(containerClass).toBeDefined();
@@ -173,7 +173,7 @@ describe('CSSParser', () => {
         }
       `;
 
-      const classes = parser.extractClasses(cssContent);
+      const { classes } = parser.extractClasses(cssContent);
 
       expect(classes.size).toBe(1);
       expect(classes.has('class-selector')).toBe(true);

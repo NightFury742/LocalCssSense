@@ -47,13 +47,33 @@ export class ComponentIndex {
   }
 
   /**
-   * Gets a CSS class by name from any imported CSS file.
+   * Gets a CSS class by name from any imported CSS file (first occurrence only).
    * 
    * @param className - CSS class name (without leading dot)
    * @returns CSSClass instance or undefined if not found
    */
   getClass(className: string): CSSClass | undefined {
     return this.allClasses.get(className);
+  }
+
+  /**
+   * Gets all occurrences of a CSS class from all imported CSS files (base + media queries).
+   * Returns occurrences sorted by line number (base definition first).
+   * 
+   * @param className - CSS class name (without leading dot)
+   * @returns Array of CSSClass instances, or empty array if not found
+   */
+  getAllClasses(className: string): CSSClass[] {
+    const allOccurrences: CSSClass[] = [];
+    
+    // Collect all occurrences from all CSS files
+    for (const cssFile of this.cssFiles.values()) {
+      const occurrences = cssFile.getAllClasses(className);
+      allOccurrences.push(...occurrences);
+    }
+    
+    // Sort by line number (base definition first)
+    return allOccurrences.sort((a, b) => a.lineNumber - b.lineNumber);
   }
 
   /**

@@ -8,22 +8,25 @@
 
 ### 1. VS Code Extension Architecture for Language Features
 
-**Decision**: Use VS Code Language Server Protocol (LSP) features via `CompletionItemProvider` and `HoverProvider` APIs.
+**Decision**: Use VS Code Language Server Protocol (LSP) features via `CompletionItemProvider`, `HoverProvider`, and `DefinitionProvider` APIs.
 
 **Rationale**: 
-- VS Code provides built-in APIs for completion (`vscode.languages.registerCompletionItemProvider`) and hover (`vscode.languages.registerHoverProvider`)
+- VS Code provides built-in APIs for completion (`vscode.languages.registerCompletionItemProvider`), hover (`vscode.languages.registerHoverProvider`), and definition (`vscode.languages.registerDefinitionProvider`)
 - These APIs are lightweight and don't require a full Language Server Protocol implementation
 - Supports lazy activation via `onLanguage` activation events
 - Provides excellent performance with built-in caching and debouncing
+- DefinitionProvider enables "Go to Definition" functionality (Ctrl+click / Cmd+click) that navigates to CSS class definitions
 
 **Alternatives Considered**:
 - Full LSP implementation: Overkill for this use case, adds complexity
 - Custom command-based approach: Less integrated with VS Code's IntelliSense system
 - Language Server: Requires separate process, adds overhead
+- Custom keybinding handler: Less discoverable, doesn't integrate with VS Code's native navigation features
 
 **References**:
 - VS Code Extension API: `vscode.languages.registerCompletionItemProvider`
 - VS Code Extension API: `vscode.languages.registerHoverProvider`
+- VS Code Extension API: `vscode.languages.registerDefinitionProvider`
 - VS Code Activation Events: `onLanguage` events
 
 ---
@@ -183,6 +186,38 @@ Map<string, Map<string, CSSFile>>
 **References**:
 - VS Code Performance Best Practices
 - Node.js async/await patterns
+
+---
+
+### 8. Go to Definition Implementation
+
+**Decision**: Use VS Code's `DefinitionProvider` API to implement "Go to Definition" functionality for CSS class names.
+
+**Rationale**:
+- Built-in VS Code API, no external dependencies
+- Integrates seamlessly with VS Code's native navigation (Ctrl+click / Cmd+click)
+- Uses existing CSS index data structure (no additional storage needed)
+- Returns `Location` object with URI and position (line number from CSSClass entity)
+- Performance: < 300ms response time (per SC-011), leverages existing index lookups
+
+**Implementation Approach**:
+- Implement `DefinitionProvider` interface with `provideDefinition()` method
+- Check if cursor is in `styleName` attribute (reuse logic from HoverProvider)
+- Extract CSS class name at cursor position
+- Lookup class in CSS index (reuse existing `CSSIndex.getClass()` method)
+- Return `Location` object with CSS file URI and line number from `CSSClass.lineNumber`
+- Handle multiple definitions: Return first occurrence (base definition) per FR-023
+- Register provider for same languages as CompletionProvider and HoverProvider
+
+**Edge Cases**:
+- Class not found: Return `undefined` (no navigation)
+- Multiple CSS files with same class: Navigate to first occurrence (base definition)
+- Class in media query: Navigate to base definition first, media query variants shown in hover
+
+**References**:
+- VS Code Extension API: `vscode.languages.registerDefinitionProvider`
+- VS Code API: `vscode.Location`
+- VS Code API: `vscode.Position`
 
 ---
 

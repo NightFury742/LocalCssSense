@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import { CSSIndex } from './services/cssIndex';
 import { CompletionProvider } from './providers/completionProvider';
 import { HoverProvider } from './providers/hoverProvider';
+import { DefinitionProvider } from './providers/definitionProvider';
+import { DiagnosticProvider } from './providers/diagnosticProvider';
 import { Logger } from './utils/logger';
 
 // Global CSS index instance (lazy initialized)
@@ -59,6 +61,56 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   context.subscriptions.push(hoverDisposable);
 
+  // Register definition provider for typescriptreact, javascriptreact, typescript, and javascript
+  const definitionProvider = new DefinitionProvider(getCSSIndex());
+  const definitionDisposable = vscode.languages.registerDefinitionProvider(
+    [
+      { scheme: 'file', language: 'typescriptreact' },
+      { scheme: 'file', language: 'javascriptreact' },
+      { scheme: 'file', language: 'typescript' },
+      { scheme: 'file', language: 'javascript' }
+    ],
+    definitionProvider
+  );
+  context.subscriptions.push(definitionDisposable);
+
+  // Register diagnostic provider for typescriptreact and javascriptreact
+  const diagnosticCollection = vscode.languages.createDiagnosticCollection('localCssSense');
+  context.subscriptions.push(diagnosticCollection);
+  const diagnosticProvider = new DiagnosticProvider(getCSSIndex(), diagnosticCollection);
+  
+  // Update diagnostics when document changes
+  const updateDiagnostics = async (document: vscode.TextDocument) => {
+    if (['typescriptreact', 'javascriptreact', 'typescript', 'javascript'].includes(document.languageId)) {
+      await diagnosticProvider.updateDiagnostics(document);
+    }
+  };
+
+  // Update diagnostics for all open documents
+  vscode.workspace.textDocuments.forEach(updateDiagnostics);
+
+  // Update diagnostics when document is opened, changed, or saved
+  const onDidChangeTextDocument = vscode.workspace.onDidChangeTextDocument(
+    async (event) => {
+      await updateDiagnostics(event.document);
+    }
+  );
+  context.subscriptions.push(onDidChangeTextDocument);
+
+  const onDidOpenTextDocument = vscode.workspace.onDidOpenTextDocument(
+    async (document) => {
+      await updateDiagnostics(document);
+    }
+  );
+  context.subscriptions.push(onDidOpenTextDocument);
+
+  const onDidSaveTextDocument = vscode.workspace.onDidSaveTextDocument(
+    async (document) => {
+      await updateDiagnostics(document);
+    }
+  );
+  context.subscriptions.push(onDidSaveTextDocument);
+
   // Register command to trigger completion manually (Ctrl+Enter)
   const triggerCompletionCommand = vscode.commands.registerCommand(
     'localCssSense.triggerCompletion',
@@ -73,6 +125,12 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   );
   context.subscriptions.push(triggerCompletionCommand);
+
+  // Set up file watchers for CSS files and component files (Phase 4)
+  const fileWatcherDisposables = getCSSIndex().setupFileWatchers();
+  for (const disposable of fileWatcherDisposables) {
+    context.subscriptions.push(disposable);
+  }
 
   Logger.info('Extension activated successfully');
 }

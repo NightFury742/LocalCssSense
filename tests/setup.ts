@@ -78,7 +78,29 @@ const createMockDocument = (filePath: string) => {
   
   return {
     uri: { fsPath: filePath },
-    getText: () => content,
+    getText: (range?: any) => {
+      if (!range) {
+        return content;
+      }
+      // If range is provided, extract text within that range
+      const startLine = range.start.line;
+      const endLine = range.end.line;
+      const startChar = range.start.character;
+      const endChar = range.end.character;
+      
+      if (startLine === endLine) {
+        // Single line range
+        return lines[startLine]?.substring(startChar, endChar) || '';
+      } else {
+        // Multi-line range
+        let result = lines[startLine]?.substring(startChar) || '';
+        for (let i = startLine + 1; i < endLine; i++) {
+          result += '\n' + (lines[i] || '');
+        }
+        result += '\n' + (lines[endLine]?.substring(0, endChar) || '');
+        return result;
+      }
+    },
     lineAt: (line: number) => ({
       text: lines[line] || '',
       lineNumber: line,
@@ -87,16 +109,20 @@ const createMockDocument = (filePath: string) => {
       const line = lines[position.line] || '';
       if (regex) {
         // Try to find a match at or before the position
-        // Create a string from start of line to position, then search backwards
-        const textBefore = line.substring(0, position.character + 1);
-        // Find all matches and get the one that contains or is closest to the position
+        // Find all matches and get the one that contains the position
         let match;
-        const regexGlobal = new RegExp(regex.source, regex.flags.includes('g') ? regex.flags : regex.flags + 'g');
+        // Create a non-global version for single match, but we'll iterate manually
+        const regexSource = regex.source;
+        const regexFlags = regex.flags.includes('g') ? regex.flags : regex.flags + 'g';
+        const regexGlobal = new RegExp(regexSource, regexFlags);
+        
+        // Reset lastIndex to ensure we search from the beginning
+        regexGlobal.lastIndex = 0;
         while ((match = regexGlobal.exec(line)) !== null) {
           const matchStart = match.index;
           const matchEnd = match.index + match[0].length;
           // Check if position is within this match
-          if (position.character >= matchStart && position.character <= matchEnd) {
+          if (position.character >= matchStart && position.character < matchEnd) {
             return new MockRange(
               new MockPosition(position.line, matchStart),
               new MockPosition(position.line, matchEnd)
@@ -121,7 +147,7 @@ const createMockDocument = (filePath: string) => {
       }
       return null;
     },
-    languageId: filePath.endsWith('.tsx') ? 'typescriptreact' : filePath.endsWith('.jsx') ? 'javascriptreact' : 'plaintext',
+    languageId: filePath.endsWith('.tsx') ? 'typescriptreact' : filePath.endsWith('.jsx') ? 'javascriptreact' : filePath.endsWith('.ts') ? 'typescript' : filePath.endsWith('.js') ? 'javascript' : 'plaintext',
   };
 };
 
@@ -146,10 +172,59 @@ const mockVSCode = {
         return filePath;
       }
     }),
+    textDocuments: [],
+    onDidChangeTextDocument: vi.fn(),
+    onDidOpenTextDocument: vi.fn(),
+    onDidSaveTextDocument: vi.fn(),
+    workspaceFolders: [],
   },
   languages: {
     registerCompletionItemProvider: vi.fn(),
     registerHoverProvider: vi.fn(),
+    registerDefinitionProvider: vi.fn(),
+    createDiagnosticCollection: vi.fn((name: string) => {
+      const diagnostics = new Map<string, any[]>();
+      return {
+        set: vi.fn((uri: any, diags: any[]) => {
+          diagnostics.set(uri.fsPath || uri.path || uri.toString(), diags || []);
+        }),
+        get: vi.fn((uri: any) => {
+          return diagnostics.get(uri.fsPath || uri.path || uri.toString());
+        }),
+        delete: vi.fn((uri: any) => {
+          diagnostics.delete(uri.fsPath || uri.path || uri.toString());
+        }),
+        clear: vi.fn(() => {
+          diagnostics.clear();
+        }),
+        dispose: vi.fn(() => {
+          diagnostics.clear();
+        }),
+        has: vi.fn((uri: any) => {
+          return diagnostics.has(uri.fsPath || uri.path || uri.toString());
+        }),
+      };
+    }),
+  },
+  DiagnosticSeverity: {
+    Error: 0,
+    Warning: 1,
+    Information: 2,
+    Hint: 3,
+  },
+  Diagnostic: class MockDiagnostic {
+    constructor(
+      public range: any,
+      public message: string,
+      public severity: number
+    ) {}
+    source?: string;
+  },
+  Location: class MockLocation {
+    constructor(public uri: any, public range: any) {}
+  },
+  Uri: {
+    file: vi.fn((path: string) => ({ fsPath: path, path })),
   },
   Position: MockPosition,
   Range: MockRange,

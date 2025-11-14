@@ -16,9 +16,15 @@ export class CSSFile {
   readonly lastModified: number;
 
   /**
-   * Map of class name → CSSClass object.
+   * Map of class name → CSSClass object (first occurrence only, for backward compatibility).
+   * Use getAllClasses() to get all occurrences including media queries.
    */
   readonly classes: Map<string, CSSClass>;
+
+  /**
+   * Map of class name → Array of all CSSClass occurrences (base + media queries).
+   */
+  readonly allClassOccurrences: Map<string, CSSClass[]>;
 
   /**
    * Raw CSS file content (cached for hover tooltips).
@@ -37,7 +43,8 @@ export class CSSFile {
     filePath: string,
     lastModified: number,
     classes: Map<string, CSSClass>,
-    rawContent: string
+    rawContent: string,
+    allClassOccurrences?: Map<string, CSSClass[]>
   ) {
     // Validate file path is absolute
     if (!filePath || !path.isAbsolute(filePath)) {
@@ -52,16 +59,30 @@ export class CSSFile {
     this.lastModified = lastModified;
     this.classes = new Map(classes);
     this.rawContent = rawContent;
+    // If allClassOccurrences not provided, create from classes (backward compatibility)
+    this.allClassOccurrences = allClassOccurrences || new Map(
+      Array.from(classes.entries()).map(([name, cls]) => [name, [cls]])
+    );
   }
 
   /**
-   * Gets a CSS class by name.
+   * Gets a CSS class by name (first occurrence only, for backward compatibility).
    * 
    * @param className - CSS class name (without leading dot)
    * @returns CSSClass instance or undefined if not found
    */
   getClass(className: string): CSSClass | undefined {
     return this.classes.get(className);
+  }
+
+  /**
+   * Gets all occurrences of a CSS class (base + media queries).
+   * 
+   * @param className - CSS class name (without leading dot)
+   * @returns Array of CSSClass instances, or empty array if not found
+   */
+  getAllClasses(className: string): CSSClass[] {
+    return this.allClassOccurrences.get(className) || [];
   }
 
   /**
@@ -91,7 +112,8 @@ export class CSSFile {
       this.filePath,
       this.lastModified,
       this.classes,
-      this.rawContent
+      this.rawContent,
+      this.allClassOccurrences
     );
   }
 }

@@ -73,6 +73,8 @@ description: "Task list for Local CSS IntelliSense Extension implementation"
 - [X] T019 [P] [US1] Create unit test for CSSIndex service operations in tests/unit/cssIndex.test.ts
 - [X] T020 [P] [US1] Create integration test for CompletionProvider in tests/integration/completionProvider.test.ts
 - [X] T021 [P] [US1] Create integration test for HoverProvider in tests/integration/hoverProvider.test.ts
+- [X] T039 [P] [US1] Create integration test for DefinitionProvider.provideDefinition() in tests/integration/definitionProvider.test.ts
+- [X] T040 [P] [US1] Create integration test for DiagnosticProvider invalid class name detection in tests/integration/diagnosticProvider.test.ts
 
 ### Implementation for User Story 1
 
@@ -93,8 +95,16 @@ description: "Task list for Local CSS IntelliSense Extension implementation"
 - [X] T036 [US1] Implement lazy initialization of CSS index on first completion request in src/extension.ts
 - [X] T037 [US1] Add error handling for malformed CSS (graceful degradation) in src/services/cssParser.ts
 - [X] T038 [US1] Add validation for CSS class names used in styleName prop in src/providers/completionProvider.ts
+- [X] T041 [US1] Implement CSSIndex.getClass() method for looking up CSS class by name in src/services/cssIndex.ts
+- [X] T042 [US1] Implement DefinitionProvider.provideDefinition() method to navigate to CSS class definitions in src/providers/definitionProvider.ts
+- [X] T043 [US1] Implement DefinitionProvider class name detection within styleName attribute in src/providers/definitionProvider.ts
+- [X] T044 [US1] Implement DefinitionProvider to return first occurrence (base definition) when multiple definitions exist in src/providers/definitionProvider.ts
+- [X] T045 [US1] Register DefinitionProvider for typescriptreact, javascriptreact, typescript, and javascript languages in src/extension.ts
+- [X] T046 [US1] Implement DiagnosticProvider to show VS Code diagnostics with Information severity for invalid CSS class names in src/providers/diagnosticProvider.ts
+- [X] T047 [US1] Implement DiagnosticProvider class name detection within styleName attribute in src/providers/diagnosticProvider.ts
+- [X] T048 [US1] Register DiagnosticProvider for typescriptreact and javascriptreact languages in src/extension.ts
 
-**Checkpoint**: At this point, User Story 1 should be fully functional and testable independently. Developers can use autocomplete and hover for CSS classes in styleName props.
+**Checkpoint**: At this point, User Story 1 should be fully functional and testable independently. Developers can use autocomplete, hover, go to definition (Ctrl+click), and see diagnostics (squiggly lines) for CSS classes in styleName props.
 
 ---
 
@@ -106,21 +116,21 @@ description: "Task list for Local CSS IntelliSense Extension implementation"
 
 ### Tests for User Story 2
 
-- [ ] T039 [P] [US2] Create unit test for CSSIndex file change handling in tests/unit/cssIndex.test.ts
-- [ ] T040 [P] [US2] Create integration test for file watcher updates in tests/integration/fileWatcher.test.ts
-- [ ] T041 [P] [US2] Create integration test for import statement change detection in tests/integration/importParser.test.ts
+- [X] T049 [P] [US2] Create unit test for CSSIndex file change handling in tests/unit/cssIndex.test.ts
+- [X] T050 [P] [US2] Create integration test for file watcher updates in tests/integration/fileWatcher.test.ts
+- [X] T051 [P] [US2] Create integration test for import statement change detection in tests/integration/importParser.test.ts
 
 ### Implementation for User Story 2
 
-- [ ] T042 [US2] Implement FileSystemWatcher for CSS files in workspace in src/services/cssIndex.ts
-- [ ] T043 [US2] Implement FileSystemWatcher for component files to detect import changes in src/services/cssIndex.ts
-- [ ] T044 [US2] Implement debounced file change handler (2 second window per SC-005) in src/services/cssIndex.ts
-- [ ] T045 [US2] Implement CSSIndex.updateCSSFile() method for re-parsing modified CSS files in src/services/cssIndex.ts
-- [ ] T046 [US2] Implement CSSIndex.removeCSSFile() method for handling deleted CSS files in src/services/cssIndex.ts
-- [ ] T047 [US2] Implement CSSIndex.handleComponentChange() method for detecting new/removed imports in src/services/cssIndex.ts
-- [ ] T048 [US2] Register file watchers in extension activation and dispose in deactivation in src/extension.ts
-- [ ] T049 [US2] Implement cache invalidation based on file modification timestamps in src/services/cssIndex.ts
-- [ ] T050 [US2] Add async file change processing to avoid blocking VS Code UI thread in src/services/cssIndex.ts
+- [X] T052 [US2] Implement FileSystemWatcher for CSS files in workspace in src/services/cssIndex.ts
+- [X] T053 [US2] Implement FileSystemWatcher for component files to detect import changes in src/services/cssIndex.ts
+- [X] T054 [US2] Implement debounced file change handler (2 second window per SC-005) in src/services/cssIndex.ts
+- [X] T055 [US2] Implement CSSIndex.updateCSSFile() method for re-parsing modified CSS files in src/services/cssIndex.ts
+- [X] T056 [US2] Implement CSSIndex.removeCSSFile() method for handling deleted CSS files in src/services/cssIndex.ts
+- [X] T057 [US2] Implement CSSIndex.handleComponentChange() method for detecting new/removed imports in src/services/cssIndex.ts
+- [X] T058 [US2] Register file watchers in extension activation and dispose in deactivation in src/extension.ts
+- [X] T059 [US2] Implement cache invalidation based on file modification timestamps in src/services/cssIndex.ts
+- [X] T060 [US2] Add async file change processing to avoid blocking VS Code UI thread in src/services/cssIndex.ts
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently. The extension automatically updates when CSS files or imports change.
 
@@ -134,22 +144,22 @@ description: "Task list for Local CSS IntelliSense Extension implementation"
 
 ### Tests for User Story 3
 
-- [ ] T051 [P] [US3] Create unit test for configuration parsing in tests/unit/config.test.ts
-- [ ] T052 [P] [US3] Create integration test for parent directory import resolution in tests/integration/importParser.test.ts
-- [ ] T053 [P] [US3] Create integration test for path alias resolution in tests/integration/pathResolver.test.ts
+- [ ] T061 [P] [US3] Create unit test for configuration parsing in tests/unit/config.test.ts
+- [ ] T062 [P] [US3] Create integration test for parent directory import resolution in tests/integration/importParser.test.ts
+- [ ] T063 [P] [US3] Create integration test for path alias resolution in tests/integration/pathResolver.test.ts
 
 ### Implementation for User Story 3
 
-- [ ] T054 [US3] Create configuration model for extension settings in src/models/config.ts
-- [ ] T055 [US3] Implement configuration service for reading VS Code settings in src/services/config.ts
-- [ ] T056 [US3] Extend ImportParser.resolveImportPath() to support parent directory imports (`../`) in src/services/importParser.ts
-- [ ] T057 [US3] Extend pathResolver to support path aliases (`@/`, `~`) with configuration in src/utils/pathResolver.ts
-- [ ] T058 [US3] Extend ImportParser to support CSS Modules import pattern (`import styles from './styles.module.css'`) in src/services/importParser.ts
-- [ ] T059 [US3] Add configuration option for CSS file discovery patterns in package.json (contributes.configuration)
-- [ ] T060 [US3] Add configuration option for custom attribute names (default: styleName) in package.json
-- [ ] T061 [US3] Update CompletionProvider to use configured attribute name in src/providers/completionProvider.ts
-- [ ] T062 [US3] Implement CSS file scanning based on configuration patterns in src/services/cssIndex.ts
-- [ ] T063 [US3] Add support for HTML files with `class` attribute when configured in src/providers/completionProvider.ts
+- [ ] T064 [US3] Create configuration model for extension settings in src/models/config.ts
+- [ ] T065 [US3] Implement configuration service for reading VS Code settings in src/services/config.ts
+- [ ] T066 [US3] Extend ImportParser.resolveImportPath() to support parent directory imports (`../`) in src/services/importParser.ts
+- [ ] T067 [US3] Extend pathResolver to support path aliases (`@/`, `~`) with configuration in src/utils/pathResolver.ts
+- [ ] T068 [US3] Extend ImportParser to support CSS Modules import pattern (`import styles from './styles.module.css'`) in src/services/importParser.ts
+- [ ] T069 [US3] Add configuration option for CSS file discovery patterns in package.json (contributes.configuration)
+- [ ] T070 [US3] Add configuration option for custom attribute names (default: styleName) in package.json
+- [ ] T071 [US3] Update CompletionProvider to use configured attribute name in src/providers/completionProvider.ts
+- [ ] T072 [US3] Implement CSS file scanning based on configuration patterns in src/services/cssIndex.ts
+- [ ] T073 [US3] Add support for HTML files with `class` attribute when configured in src/providers/completionProvider.ts
 
 **Checkpoint**: All user stories should now be independently functional. The extension supports both org-specific setup and general use cases with configuration.
 
@@ -159,17 +169,17 @@ description: "Task list for Local CSS IntelliSense Extension implementation"
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T064 [P] Update README.md with installation and usage instructions
-- [ ] T065 [P] Add JSDoc comments for all public interfaces and methods
-- [ ] T066 Code cleanup and refactoring across all services
-- [ ] T067 Performance optimization: verify autocomplete < 500ms, hover < 300ms, file updates < 2s
-- [ ] T068 [P] Add comprehensive error handling and logging throughout extension
-- [ ] T069 [P] Add unit test coverage for edge cases (malformed CSS, missing files, invalid paths) in tests/unit/
-- [ ] T070 Memory usage optimization: verify < 50MB idle memory footprint
-- [ ] T071 Run quickstart.md validation scenarios
-- [ ] T072 [P] Add VS Code extension icon and marketplace assets
-- [ ] T073 Verify lazy activation works correctly (< 100ms activation time)
-- [ ] T074 [P] Add extension changelog and version management
+- [ ] T074 [P] Update README.md with installation and usage instructions
+- [ ] T075 [P] Add JSDoc comments for all public interfaces and methods
+- [ ] T076 Code cleanup and refactoring across all services
+- [ ] T077 Performance optimization: verify autocomplete < 500ms, hover < 300ms, go to definition < 300ms, file updates < 2s
+- [ ] T078 [P] Add comprehensive error handling and logging throughout extension
+- [ ] T079 [P] Add unit test coverage for edge cases (malformed CSS, missing files, invalid paths) in tests/unit/
+- [ ] T080 Memory usage optimization: verify < 50MB idle memory footprint
+- [ ] T081 Run quickstart.md validation scenarios
+- [ ] T082 [P] Add VS Code extension icon and marketplace assets
+- [ ] T083 Verify lazy activation works correctly (< 100ms activation time)
+- [ ] T084 [P] Add extension changelog and version management
 
 ---
 
@@ -271,7 +281,7 @@ With multiple developers:
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
-- Performance targets: Activation < 100ms, Autocomplete < 500ms, Hover < 300ms, File updates < 2s
+- Performance targets: Activation < 100ms, Autocomplete < 500ms, Hover < 300ms, Go to Definition < 300ms, File updates < 2s
 - Memory target: < 50MB idle
 - All file paths use absolute paths or paths relative to repository root
 
@@ -279,14 +289,14 @@ With multiple developers:
 
 ## Task Summary
 
-- **Total Tasks**: 74
+- **Total Tasks**: 84
 - **Setup Tasks**: 6 (T001-T006)
 - **Foundational Tasks**: 8 (T007-T014)
-- **User Story 1 Tasks**: 24 (T015-T038) - MVP
-- **User Story 2 Tasks**: 12 (T039-T050)
-- **User Story 3 Tasks**: 13 (T051-T063)
-- **Polish Tasks**: 11 (T064-T074)
+- **User Story 1 Tasks**: 34 (T015-T048) - MVP
+- **User Story 2 Tasks**: 12 (T049-T060)
+- **User Story 3 Tasks**: 13 (T061-T073)
+- **Polish Tasks**: 11 (T074-T084)
 - **Parallel Opportunities**: 30+ tasks can run in parallel
 - **Independent Test Criteria**: Each user story has clear independent test criteria
-- **Suggested MVP Scope**: User Story 1 only (24 tasks + setup/foundational = 38 tasks total)
+- **Suggested MVP Scope**: User Story 1 only (34 tasks + setup/foundational = 48 tasks total)
 

@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import { CSSIndex } from '../services/cssIndex';
 import { ImportParser } from '../services/importParser';
 import { Logger } from '../utils/logger';
@@ -19,7 +21,8 @@ export class CompletionProvider implements vscode.CompletionItemProvider {
   /**
    * Resolves additional information for a completion item.
    * Called when user navigates through completion items (up/down arrows).
-   * Ensures class declaration is shown in the details panel.
+   * Shows all definitions (base + media queries) with proper labeling matching hover format.
+   * Per FR-018: Details panel displays all definitions with proper labeling.
    * 
    * @param item - Completion item to resolve
    * @param token - Cancellation token
@@ -30,39 +33,79 @@ export class CompletionProvider implements vscode.CompletionItemProvider {
     token: vscode.CancellationToken
   ): Promise<vscode.CompletionItem> {
     try {
-      // Get component path and class name from item data
-      const itemData = (item as any).data as { componentPath?: string; className?: string } | undefined;
+      // Get component path, class name, and all occurrences from item data
+      const itemData = (item as any).data as { 
+        componentPath?: string; 
+        className?: string; 
+        allOccurrences?: any[] 
+      } | undefined;
+      
       const className = itemData?.className || (typeof item.label === 'string' ? item.label : item.label.label);
       
-      if (!className) {
+      if (!className || !itemData?.componentPath) {
         return item;
       }
 
-      // Always try to get the CSS class to ensure documentation is set
-      // This is called when user scrolls through completion items
-      if (itemData?.componentPath) {
-        const componentIndex = this.cssIndex.getComponentIndex(itemData.componentPath);
-        if (componentIndex) {
-          const cssClass = componentIndex.getClass(className);
-          if (cssClass) {
-            // Set documentation with full CSS definition
-            // This will be shown in the details panel when scrolling
-            const preview = this.getCSSDefinitionPreview(cssClass);
-            const markdownDoc = new vscode.MarkdownString(preview);
-            markdownDoc.isTrusted = true;
-            item.documentation = markdownDoc;
-            
-            // Ensure detail is set
-            const relativePath = vscode.workspace.asRelativePath(cssClass.sourceFile);
-            item.detail = `from ${relativePath}`;
-            
-            return item;
-          }
+      const componentIndex = this.cssIndex.getComponentIndex(itemData.componentPath);
+      if (!componentIndex) {
+        return item;
+      }
+
+      // Get all occurrences (either from stored data or from component index)
+      const allOccurrences = itemData.allOccurrences || componentIndex.getAllClasses(className);
+      
+      if (allOccurrences.length === 0) {
+        return item;
+      }
+
+      // Get CSS file content for media query detection
+      // Collect all unique source files from occurrences
+      const sourceFiles = new Set<string>();
+      for (const occurrence of allOccurrences) {
+        sourceFiles.add(occurrence.sourceFile);
+      }
+      
+      const cssFileContents = new Map<string, string>();
+      // First, try to get from cached CSS files
+      // Use normalized paths as keys to ensure consistent matching
+      for (const cssFile of componentIndex.cssFiles.values()) {
+        if (cssFile.rawContent) {
+          const normalizedPath = path.normalize(cssFile.filePath);
+          cssFileContents.set(normalizedPath, cssFile.rawContent);
         }
       }
       
-      // If we couldn't resolve the CSS class, return item as-is
-      // (This shouldn't happen in normal operation)
+      // Fallback: read from file system for any missing files
+      // Also normalize source file paths for consistent matching
+      for (const sourceFile of sourceFiles) {
+        const normalizedSourceFile = path.normalize(sourceFile);
+        if (!cssFileContents.has(normalizedSourceFile)) {
+          const content = this.getCSSFileContent(sourceFile);
+          if (content) {
+            cssFileContents.set(normalizedSourceFile, content);
+          }
+        }
+      }
+
+      // Create documentation showing all definitions with proper labeling
+      // Format matches hover provider for consistency
+      const documentation = this.createCompletionDocumentation(
+        className,
+        allOccurrences,
+        cssFileContents
+      );
+
+      if (documentation) {
+        const markdownDoc = new vscode.MarkdownString(documentation);
+        markdownDoc.isTrusted = true;
+        item.documentation = markdownDoc;
+      }
+
+      // Ensure detail is set (source file only, no context indication)
+      const firstOccurrence = allOccurrences[0];
+      const relativePath = vscode.workspace.asRelativePath(firstOccurrence.sourceFile);
+      item.detail = `from ${relativePath}`;
+      
       return item;
     } catch (error) {
       Logger.error('Error resolving completion item', error as Error);
@@ -128,14 +171,36 @@ export class CompletionProvider implements vscode.CompletionItemProvider {
       const existingClasses = this.getExistingClasses(document, position);
       Logger.debug(`Existing classes in styleName: ${existingClasses.join(', ')}`);
 
-      // Create completion items for each CSS class
+      // Create completion items for each CSS class occurrence (base + media queries)
       const completionItems: vscode.CompletionItem[] = [];
       const classNames = componentIndex.getClassNames();
       Logger.debug(`Found ${classNames.length} CSS classes`);
 
+      // Use a Set to ensure we only create one completion item per class name
+      // This prevents VS Code from adding suffixes like "(base)" or "(2)"
+      const addedClassNames = new Set<string>();
+
+      // Get CSS file content for media query detection
+      const cssFileContents = new Map<string, string>();
+      // First, try to get from cached CSS files
+      // Use normalized paths as keys to ensure consistent matching
+      for (const cssFile of componentIndex.cssFiles.values()) {
+        if (cssFile.rawContent) {
+          const normalizedPath = path.normalize(cssFile.filePath);
+          cssFileContents.set(normalizedPath, cssFile.rawContent);
+        }
+      }
+
       for (const className of classNames) {
-        const cssClass = componentIndex.getClass(className);
-        if (!cssClass) {
+        // Skip if we've already added this class name (defensive check)
+        if (addedClassNames.has(className)) {
+          Logger.debug(`Skipping duplicate class name: ${className}`);
+          continue;
+        }
+
+        // Get all occurrences of this class (base + media queries)
+        const allOccurrences = componentIndex.getAllClasses(className);
+        if (allOccurrences.length === 0) {
           continue;
         }
 
@@ -150,42 +215,75 @@ export class CompletionProvider implements vscode.CompletionItemProvider {
           continue;
         }
 
+        // Ensure we have CSS file content for all source files (with fallback)
+        // Normalize paths for consistent matching
+        for (const occurrence of allOccurrences) {
+          const normalizedSourceFile = path.normalize(occurrence.sourceFile);
+          if (!cssFileContents.has(normalizedSourceFile)) {
+            const content = this.getCSSFileContent(occurrence.sourceFile);
+            if (content) {
+              cssFileContents.set(normalizedSourceFile, content);
+            }
+          }
+        }
+
+        // Find the base instance (the one without media query context)
+        // Only show base instances in completion menu, not media query-only instances
+        let baseInstance: any = null;
+        for (const occurrence of allOccurrences) {
+          const normalizedSourceFile = path.normalize(occurrence.sourceFile);
+          const cssFileContent = cssFileContents.get(normalizedSourceFile) || null;
+          const mediaQueryContext = this.findMediaQueryContext(cssFileContent, occurrence.lineNumber);
+          if (!mediaQueryContext) {
+            // This is a base instance (not in a media query)
+            baseInstance = occurrence;
+            break;
+          }
+        }
+
+        // Skip if no base instance found (class only exists in media queries)
+        if (!baseInstance) {
+          Logger.debug(`Skipping class ${className} - no base instance found (only media queries)`);
+          continue;
+        }
+
+        // Create only ONE completion item per class name (plain class name, no label)
+        // Show only base instances in completion menu
+        const relativePath = vscode.workspace.asRelativePath(baseInstance.sourceFile);
+
         const completionItem = new vscode.CompletionItem(
-          className,
+          className, // Plain class name only - no label, just the class name
           vscode.CompletionItemKind.Class
         );
 
-        // Set detail (source file)
-        const relativePath = vscode.workspace.asRelativePath(cssClass.sourceFile);
+        // Keep label as plain string - VS Code will only add suffixes if it detects duplicates
+        // Our Set-based deduplication ensures we only create one item per class name
+
+        // Set detail (source file only)
         completionItem.detail = `from ${relativePath}`;
 
         // Set insert text - just the class name (no extra space)
         completionItem.insertText = className;
 
-        // Set documentation immediately so it's always shown in the details panel
-        // This ensures the CSS class properties are visible when scrolling through items
-        const preview = this.getCSSDefinitionPreview(cssClass);
-        const markdownDoc = new vscode.MarkdownString(preview);
-        markdownDoc.isTrusted = true;
-        completionItem.documentation = markdownDoc;
-
         // Set range to replace (from opening quote to cursor)
         const range = this.getCompletionRange(document, position);
         completionItem.range = range;
 
-        // Store component path and class name in item data for resolveCompletionItem
-        // This allows us to resolve documentation even if it wasn't set initially
-        // Using type assertion since data property exists in VS Code API but may not be in type definitions
+        // Store component path, class name, and all occurrences for resolveCompletionItem
+        // This allows resolveCompletionItem to show all definitions in the details panel
         (completionItem as any).data = {
           componentPath: componentPath,
-          className: className
+          className: className,
+          allOccurrences: allOccurrences // Store all occurrences for details panel
         };
 
         completionItems.push(completionItem);
+        addedClassNames.add(className); // Mark as added
       }
 
       Logger.debug(`Returning ${completionItems.length} completion items`);
-      return completionItems;
+      // Return as CompletionList to ensure proper handling by VS Code
+      return new vscode.CompletionList(completionItems, false);
     } catch (error) {
       Logger.error('Error providing completion items', error as Error);
       return undefined;
@@ -278,23 +376,183 @@ export class CompletionProvider implements vscode.CompletionItemProvider {
   }
 
   /**
-   * Gets a preview of CSS definition for documentation.
-   * Shows full class declaration for better visibility when scrolling through dropdown.
+   * Creates completion documentation showing only CSS properties without file paths, labels, or metadata.
+   * Format matches hover provider for consistency (base definition first, then media queries).
+   * Per FR-003 and FR-004: Details panel displays only CSS properties without file paths or labels.
+   * 
+   * @param className - CSS class name
+   * @param allOccurrences - All occurrences of the class (base + media queries)
+   * @param cssFileContents - Map of CSS file paths to their raw content
+   * @returns Markdown string with all definitions formatted
    */
-  private getCSSDefinitionPreview(cssClass: any): string {
-    // Show all properties for complete class declaration
-    const properties = Array.from(cssClass.properties.entries()) as Array<[string, string]>;
-    const preview = properties.map((entry) => `  ${entry[0]}: ${entry[1]};`).join('\n');
-    
-    // Include source file and line number for context
-    const relativePath = vscode.workspace.asRelativePath(cssClass.sourceFile);
-    const sourceInfo = `**Source:** ${relativePath} (line ${cssClass.lineNumber})`;
-    
-    if (preview) {
-      return `${sourceInfo}\n\n\`\`\`css\n.${cssClass.name} {\n${preview}\n}\n\`\`\``;
+  private createCompletionDocumentation(
+    className: string,
+    allOccurrences: any[],
+    cssFileContents: Map<string, string>
+  ): string {
+    if (allOccurrences.length === 0) {
+      return '';
+    }
+
+    let documentation = '';
+
+    if (allOccurrences.length === 1) {
+      // Single definition - show with media query context if applicable
+      const cssClass = allOccurrences[0];
+      if (!cssClass.fullDefinition) {
+        // Fallback: show empty definition if fullDefinition is missing
+        documentation += `\`\`\`css\n.${cssClass.name} {\n}\n\`\`\``;
+      } else {
+        const normalizedSourceFile = path.normalize(cssClass.sourceFile);
+        const cssFileContent = cssFileContents.get(normalizedSourceFile) || null;
+        const mediaQueryContext = cssFileContent ? this.findMediaQueryContext(cssFileContent, cssClass.lineNumber) : null;
+        
+        if (mediaQueryContext) {
+          documentation += `\`\`\`css\n${mediaQueryContext} {\n  ${cssClass.fullDefinition}\n}\n\`\`\``;
+        } else {
+          documentation += `\`\`\`css\n${cssClass.fullDefinition}\n\`\`\``;
+        }
+      }
+    } else {
+      // Multiple definitions - show all, base first, without labels
+      // Sort occurrences: base definitions first (no media query), then media query variants
+      const sortedOccurrences = [...allOccurrences].sort((a, b) => {
+        const aNormalizedPath = path.normalize(a.sourceFile);
+        const bNormalizedPath = path.normalize(b.sourceFile);
+        const aContent = cssFileContents.get(aNormalizedPath) || null;
+        const bContent = cssFileContents.get(bNormalizedPath) || null;
+        const aHasMediaQuery = this.findMediaQueryContext(aContent, a.lineNumber) !== null;
+        const bHasMediaQuery = this.findMediaQueryContext(bContent, b.lineNumber) !== null;
+        
+        // Base definitions (no media query) come first
+        if (!aHasMediaQuery && bHasMediaQuery) return -1;
+        if (aHasMediaQuery && !bHasMediaQuery) return 1;
+        return 0; // Keep original order for same type
+      });
+      
+      for (let i = 0; i < sortedOccurrences.length; i++) {
+        const cssClass = sortedOccurrences[i];
+        
+        if (i > 0) {
+          documentation += '\n\n';
+        }
+        
+        if (!cssClass.fullDefinition) {
+          // Fallback: show empty definition if fullDefinition is missing
+          documentation += `\`\`\`css\n.${cssClass.name} {\n}\n\`\`\``;
+        } else {
+          const normalizedSourceFile = path.normalize(cssClass.sourceFile);
+          const cssFileContent = cssFileContents.get(normalizedSourceFile) || null;
+          const mediaQueryContext = cssFileContent ? this.findMediaQueryContext(cssFileContent, cssClass.lineNumber) : null;
+          
+          if (mediaQueryContext) {
+            documentation += `\`\`\`css\n${mediaQueryContext} {\n  ${cssClass.fullDefinition}\n}\n\`\`\``;
+          } else {
+            documentation += `\`\`\`css\n${cssClass.fullDefinition}\n\`\`\``;
+          }
+        }
+      }
     }
     
-    return `${sourceInfo}\n\n\`\`\`css\n.${cssClass.name} {\n  /* No properties */\n}\n\`\`\``;
+    return documentation;
+  }
+
+  /**
+   * Finds the @media block that contains a class definition at the given line number.
+   * Returns the complete @media declaration (including multi-line) if found, null otherwise.
+   */
+  private findMediaQueryContext(cssContent: string | null, lineNumber: number): string | null {
+    if (!cssContent) {
+      return null;
+    }
+
+    const lines = cssContent.split('\n');
+    if (lineNumber < 1 || lineNumber > lines.length) {
+      return null;
+    }
+
+    // Look backwards from the class definition line to find the nearest @media block
+    let mediaQueryStart = -1;
+    let braceCount = 0;
+    let inMediaQuery = false;
+    
+    // Start from the line before the class definition and go backwards
+    for (let i = lineNumber - 2; i >= 0; i--) {
+      const line = lines[i];
+      
+      // Check if this line contains @media
+      if (line.includes('@media')) {
+        mediaQueryStart = i;
+        inMediaQuery = true;
+        // Check if opening brace is on the same line
+        if (line.includes('{')) {
+          braceCount = 1;
+          break;
+        }
+        // Otherwise, we'll collect lines until we find the opening brace
+        break;
+      }
+      
+      // Count braces to see if we're inside a media query
+      for (const char of line) {
+        if (char === '{') braceCount++;
+        if (char === '}') braceCount--;
+      }
+      
+      if (braceCount > 0) {
+        inMediaQuery = true;
+      } else if (inMediaQuery && braceCount === 0) {
+        // We've exited the media query, stop looking
+        break;
+      }
+    }
+    
+    if (mediaQueryStart >= 0) {
+      // Collect all lines from @media until we find the opening brace
+      const mediaQueryLines: string[] = [];
+      let foundOpeningBrace = false;
+      
+      for (let i = mediaQueryStart; i < lines.length && i < lineNumber; i++) {
+        const line = lines[i];
+        mediaQueryLines.push(line);
+        
+        // Check if this line contains the opening brace
+        if (line.includes('{')) {
+          foundOpeningBrace = true;
+          break;
+        }
+      }
+      
+      if (foundOpeningBrace) {
+        // Join all lines and extract the media query part (everything before the opening brace)
+        const fullMediaQuery = mediaQueryLines.join('\n');
+        const braceIndex = fullMediaQuery.indexOf('{');
+        if (braceIndex >= 0) {
+          return fullMediaQuery.substring(0, braceIndex).trim();
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Gets the CSS file content for a file path.
+   * Reads from file system as fallback when cached content is not available.
+   * 
+   * @param filePath - Absolute path to CSS file
+   * @returns CSS file content or null if file cannot be read
+   */
+  private getCSSFileContent(filePath: string): string | null {
+    try {
+      // Read from file system (fallback when cached content is not available)
+      if (fs.existsSync(filePath)) {
+        return fs.readFileSync(filePath, 'utf-8');
+      }
+    } catch (error) {
+      Logger.debug(`Failed to get CSS file content for ${filePath}: ${error}`);
+    }
+    return null;
   }
 
   /**
