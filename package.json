@@ -2,7 +2,7 @@
   "name": "LocalCssSense",
   "displayName": "LocalCssSense",
   "description": "IntelliSense for local CSS classes used in React/Next.js components via styleName prop",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "NightFury742",
   "icon": "images/icon.png",
   "repository": {

@@ -2,6 +2,12 @@
 
 All notable changes to the "Local CSS IntelliSense" extension will be documented in this file.
 
+## [0.1.2] - 2025-01-27
+
+### Added
+
+- Updated extension icon for VS Code marketplace
+
 ## [0.1.1] - 2025-01-27
 
 ### Added
